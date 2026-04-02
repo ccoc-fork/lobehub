@@ -39,6 +39,7 @@ import {
   GTDTodoInjector,
   HistorySummaryProvider,
   KnowledgeInjector,
+  OnboardingContextInjector,
   PageEditorContextInjector,
   PageSelectionsInjector,
   SelectedSkillInjector,
@@ -148,6 +149,7 @@ export class MessagesEngine {
       botPlatformContext,
       discordContext,
       evalContext,
+      onboardingContext,
       agentManagementContext,
       groupAgentBuilderContext,
       agentGroup,
@@ -217,6 +219,11 @@ export class MessagesEngine {
       new SystemRoleInjector({ systemRole }),
       // Eval context (appends envPrompt)
       new EvalContextSystemInjector({ enabled: !!evalContext?.envPrompt, evalContext }),
+      // Onboarding context (phase guidance + document contents)
+      new OnboardingContextInjector({
+        enabled: !!onboardingContext?.phaseGuidance,
+        onboardingContext,
+      }),
       // Bot platform context (formatting instructions for non-Markdown platforms)
       new BotPlatformContextInjector({
         context: botPlatformContext,

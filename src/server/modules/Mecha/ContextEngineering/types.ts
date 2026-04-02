@@ -9,6 +9,7 @@ import type {
   FileContent,
   KnowledgeBaseInfo,
   LobeToolManifest,
+  OnboardingContext,
   SkillMeta,
   TopicReferenceItem,
   UserMemoryData,
@@ -86,6 +87,9 @@ export interface ServerMessagesEngineParams {
   // ========== Eval context ==========
   /** Eval context for injecting environment prompts into system message */
   evalContext?: EvalContext;
+  // ========== Onboarding context ==========
+  /** Onboarding context for injecting phase guidance and documents */
+  onboardingContext?: OnboardingContext;
 
   // ========== Agent configuration ==========
   /** Whether to enable history message count limit */

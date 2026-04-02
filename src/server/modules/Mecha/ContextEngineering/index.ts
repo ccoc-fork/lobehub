@@ -69,6 +69,7 @@ export const serverMessagesEngine = async ({
   discordContext,
   evalContext,
   agentManagementContext,
+  onboardingContext,
   pageContentContext,
   topicReferences,
   additionalVariables,
@@ -152,6 +153,7 @@ export const serverMessagesEngine = async ({
     ...(botPlatformContext && { botPlatformContext }),
     ...(discordContext && { discordContext }),
     ...(evalContext && { evalContext }),
+    ...(onboardingContext && { onboardingContext }),
     ...(agentManagementContext && { agentManagementContext }),
     ...(pageContentContext && { pageContentContext }),
   });

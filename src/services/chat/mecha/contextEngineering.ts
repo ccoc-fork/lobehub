@@ -4,6 +4,7 @@ import { AgentManagementIdentifier } from '@lobechat/builtin-tool-agent-manageme
 import { CredsIdentifier, type CredSummary, generateCredsList } from '@lobechat/builtin-tool-creds';
 import { GroupAgentBuilderIdentifier } from '@lobechat/builtin-tool-group-agent-builder';
 import { GTDIdentifier } from '@lobechat/builtin-tool-gtd';
+import { WebOnboardingIdentifier } from '@lobechat/builtin-tool-web-onboarding';
 import { isDesktop, KLAVIS_SERVER_TYPES, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
 import type {
   AgentBuilderContext,
@@ -15,6 +16,7 @@ import type {
   GTDConfig,
   LobeToolManifest,
   MemoryContext,
+  OnboardingContext,
   ToolDiscoveryConfig,
   UserMemoryData,
 } from '@lobechat/context-engine';
@@ -604,6 +606,45 @@ export const contextEngineering = async ({
     },
   );
 
+  // Build onboarding context if this is the web-onboarding agent
+  let onboardingContext: OnboardingContext | undefined;
+  const isOnboardingAgent = tools?.includes(WebOnboardingIdentifier);
+  if (isOnboardingAgent) {
+    try {
+      const { userService } = await import('@/services/user');
+      const { formatWebOnboardingStateMessage } =
+        await import('@lobechat/builtin-tool-web-onboarding/utils');
+      const state = await userService.getOnboardingState();
+      const phaseGuidance = formatWebOnboardingStateMessage(state);
+
+      // Fetch SOUL.md and persona documents via raw DB access to avoid placeholder text
+      let soulContent: string | null = null;
+      let personaContent: string | null = null;
+      try {
+        const soulDoc = await userService.readOnboardingDocument('soul');
+        // Only inject real content, not empty-state placeholder messages
+        if (soulDoc?.id && soulDoc.content) {
+          soulContent = soulDoc.content;
+        }
+      } catch {
+        // Ignore — document may not exist yet
+      }
+      try {
+        const personaDoc = await userService.readOnboardingDocument('persona');
+        if (personaDoc?.id && personaDoc.content) {
+          personaContent = personaDoc.content;
+        }
+      } catch {
+        // Ignore — document may not exist yet
+      }
+
+      onboardingContext = { personaContent, phaseGuidance, soulContent };
+      log('Built onboarding context, phase: %s', state.phase);
+    } catch (error) {
+      log('Failed to build onboarding context: %O', error);
+    }
+  }
+
   // Create MessagesEngine with injected dependencies
   const engine = new MessagesEngine({
     // Agent configuration
@@ -675,6 +716,7 @@ export const contextEngineering = async ({
     ...(agentGroup && { agentGroup }),
     ...(gtdConfig && { gtd: gtdConfig }),
     ...(topicReferences && topicReferences.length > 0 && { topicReferences }),
+    ...(onboardingContext && { onboardingContext }),
   });
 
   log('Input messages count: %d', messages.length);
