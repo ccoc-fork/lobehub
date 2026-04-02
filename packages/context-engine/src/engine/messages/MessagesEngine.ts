@@ -219,11 +219,6 @@ export class MessagesEngine {
       new SystemRoleInjector({ systemRole }),
       // Eval context (appends envPrompt)
       new EvalContextSystemInjector({ enabled: !!evalContext?.envPrompt, evalContext }),
-      // Onboarding context (phase guidance + document contents)
-      new OnboardingContextInjector({
-        enabled: !!onboardingContext?.phaseGuidance,
-        onboardingContext,
-      }),
       // Bot platform context (formatting instructions for non-Markdown platforms)
       new BotPlatformContextInjector({
         context: botPlatformContext,
@@ -257,6 +252,11 @@ export class MessagesEngine {
       // Order matters: first executed = first in content
       // =============================================
 
+      // Onboarding context (phase guidance + document contents)
+      new OnboardingContextInjector({
+        enabled: !!onboardingContext?.phaseGuidance,
+        onboardingContext,
+      }),
       // User memory
       new UserMemoryInjector({ ...userMemory, enabled: isUserMemoryEnabled }),
       // Group context (agent identity and group info for multi-agent chat)

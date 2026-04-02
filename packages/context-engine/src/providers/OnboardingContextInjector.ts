@@ -1,13 +1,7 @@
 import debug from 'debug';
 
-import { BaseSystemRoleProvider } from '../base/BaseSystemRoleProvider';
+import { BaseFirstUserContentProvider } from '../base/BaseFirstUserContentProvider';
 import type { PipelineContext, ProcessorOptions } from '../types';
-
-declare module '../types' {
-  interface PipelineContextMetadataOverrides {
-    onboardingContextInjected?: boolean;
-  }
-}
 
 const log = debug('context-engine:provider:OnboardingContextInjector');
 
@@ -27,11 +21,10 @@ export interface OnboardingContextInjectorConfig {
 
 /**
  * Onboarding Context Injector
- * Appends onboarding phase guidance and document contents to the system message.
+ * Injects onboarding phase guidance and document contents before the first user message.
  * Replaces the need for LLM to call getOnboardingState and readDocument tools.
- * Should run after SystemRoleInjector in the pipeline.
  */
-export class OnboardingContextInjector extends BaseSystemRoleProvider {
+export class OnboardingContextInjector extends BaseFirstUserContentProvider {
   readonly name = 'OnboardingContextInjector';
 
   constructor(
@@ -41,9 +34,19 @@ export class OnboardingContextInjector extends BaseSystemRoleProvider {
     super(options);
   }
 
-  protected buildSystemRoleContent(_context: PipelineContext): string | null {
+  protected buildContent(context: PipelineContext): string | null {
     if (!this.config.enabled || !this.config.onboardingContext?.phaseGuidance) {
       log('Disabled or no phaseGuidance configured, skipping injection');
+      return null;
+    }
+
+    const alreadyInjected = context.messages.some(
+      (message) =>
+        typeof message.content === 'string' && message.content.includes('<onboarding_context>'),
+    );
+
+    if (alreadyInjected) {
+      log('Onboarding context already injected, skipping');
       return null;
     }
 
@@ -62,10 +65,6 @@ export class OnboardingContextInjector extends BaseSystemRoleProvider {
       );
     }
 
-    return parts.join('\n\n');
-  }
-
-  protected onInjected(context: PipelineContext): void {
-    context.metadata.onboardingContextInjected = true;
+    return `<onboarding_context>\n${parts.join('\n\n')}\n</onboarding_context>`;
   }
 }

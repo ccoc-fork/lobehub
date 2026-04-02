@@ -386,7 +386,19 @@ export const createRuntimeExecutors = (
         const isOnboardingAgent =
           agentConfig?.slug === 'web-onboarding' ||
           resolved.enabledToolIds.includes('lobe-web-onboarding');
-        if (isOnboardingAgent && ctx.serverDB && ctx.userId) {
+        const alreadyHasOnboardingContext = (
+          llmPayload.messages as Array<{ content: string | unknown }>
+        ).some((message) => {
+          if (typeof message.content !== 'string') return false;
+
+          return (
+            message.content.includes('<onboarding_context>') ||
+            message.content.includes('<current_soul_document>') ||
+            message.content.includes('<current_user_persona>')
+          );
+        });
+
+        if (isOnboardingAgent && !alreadyHasOnboardingContext && ctx.serverDB && ctx.userId) {
           try {
             const { formatWebOnboardingStateMessage } =
               await import('@lobechat/builtin-tool-web-onboarding/utils');
@@ -453,7 +465,6 @@ export const createRuntimeExecutors = (
           discordContext: ctx.discordContext,
           enableHistoryCount: agentConfig.chatConfig?.enableHistoryCount ?? undefined,
           evalContext: ctx.evalContext,
-          onboardingContext,
           forceFinish: state.forceFinish,
           historyCount: agentConfig.chatConfig?.historyCount ?? undefined,
           knowledge: {
@@ -488,6 +499,7 @@ export const createRuntimeExecutors = (
 
           // Topic reference summaries
           ...(topicReferences && { topicReferences }),
+          ...(onboardingContext && { onboardingContext }),
         };
 
         processedMessages = await serverMessagesEngine(contextEngineInput);
