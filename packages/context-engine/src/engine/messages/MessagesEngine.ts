@@ -252,11 +252,6 @@ export class MessagesEngine {
       // Order matters: first executed = first in content
       // =============================================
 
-      // Onboarding context (phase guidance + document contents)
-      new OnboardingContextInjector({
-        enabled: !!onboardingContext?.phaseGuidance,
-        onboardingContext,
-      }),
       // User memory
       new UserMemoryInjector({ ...userMemory, enabled: isUserMemoryEnabled }),
       // Group context (agent identity and group info for multi-agent chat)
@@ -336,6 +331,17 @@ export class MessagesEngine {
       new TopicReferenceContextInjector({
         enabled: !!(topicReferences && topicReferences.length > 0),
         topicReferences,
+      }),
+
+      // =============================================
+      // Phase 4.5: Virtual Tail Guidance
+      // Inject high-churn runtime guidance at the tail to preserve stable prefix caching
+      // =============================================
+
+      // Onboarding context (phase guidance + document contents)
+      new OnboardingContextInjector({
+        enabled: !!onboardingContext?.phaseGuidance,
+        onboardingContext,
       }),
 
       // =============================================

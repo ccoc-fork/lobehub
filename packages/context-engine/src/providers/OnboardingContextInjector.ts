@@ -1,6 +1,6 @@
 import debug from 'debug';
 
-import { BaseFirstUserContentProvider } from '../base/BaseFirstUserContentProvider';
+import { BaseVirtualLastUserContentProvider } from '../base/BaseVirtualLastUserContentProvider';
 import type { PipelineContext, ProcessorOptions } from '../types';
 
 const log = debug('context-engine:provider:OnboardingContextInjector');
@@ -21,10 +21,10 @@ export interface OnboardingContextInjectorConfig {
 
 /**
  * Onboarding Context Injector
- * Injects onboarding phase guidance and document contents before the first user message.
+ * Injects onboarding phase guidance and document contents at the virtual last-user position.
  * Replaces the need for LLM to call getOnboardingState and readDocument tools.
  */
-export class OnboardingContextInjector extends BaseFirstUserContentProvider {
+export class OnboardingContextInjector extends BaseVirtualLastUserContentProvider {
   readonly name = 'OnboardingContextInjector';
 
   constructor(
@@ -34,12 +34,7 @@ export class OnboardingContextInjector extends BaseFirstUserContentProvider {
     super(options);
   }
 
-  protected buildContent(context: PipelineContext): string | null {
-    if (!this.config.enabled || !this.config.onboardingContext?.phaseGuidance) {
-      log('Disabled or no phaseGuidance configured, skipping injection');
-      return null;
-    }
-
+  protected shouldSkip(context: PipelineContext): boolean {
     const alreadyInjected = context.messages.some(
       (message) =>
         typeof message.content === 'string' && message.content.includes('<onboarding_context>'),
@@ -47,6 +42,14 @@ export class OnboardingContextInjector extends BaseFirstUserContentProvider {
 
     if (alreadyInjected) {
       log('Onboarding context already injected, skipping');
+    }
+
+    return alreadyInjected;
+  }
+
+  protected buildContent(_context: PipelineContext): string | null {
+    if (!this.config.enabled || !this.config.onboardingContext?.phaseGuidance) {
+      log('Disabled or no phaseGuidance configured, skipping injection');
       return null;
     }
 

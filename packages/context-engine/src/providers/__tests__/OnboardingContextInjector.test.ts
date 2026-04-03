@@ -11,7 +11,7 @@ describe('OnboardingContextInjector', () => {
     metadata: {},
   });
 
-  it('should inject onboarding context before the first user message', async () => {
+  it('should append onboarding context to the last message when it is user', async () => {
     const provider = new OnboardingContextInjector({
       enabled: true,
       onboardingContext: {
@@ -28,13 +28,11 @@ describe('OnboardingContextInjector', () => {
       ]),
     );
 
-    expect(result.messages).toHaveLength(3);
+    expect(result.messages).toHaveLength(2);
     expect(result.messages[0].content).toBe('System role');
-    expect(result.messages[1]).toMatchObject({
-      meta: { systemInjection: true },
-      role: 'user',
-    });
-    expect(result.messages[1].content).toBe(`<onboarding_context>
+    expect(result.messages[1].content).toBe(`Hello
+
+<onboarding_context>
 <phase>collect-profile</phase>
 
 <current_soul_document>
@@ -45,10 +43,9 @@ describe('OnboardingContextInjector', () => {
 # Persona
 </current_user_persona>
 </onboarding_context>`);
-    expect(result.messages[2].content).toBe('Hello');
   });
 
-  it('should append to an existing before-first-user injection message', async () => {
+  it('should create a synthetic tail user message when the last message is not user', async () => {
     const provider = new OnboardingContextInjector({
       enabled: true,
       onboardingContext: {
@@ -59,19 +56,20 @@ describe('OnboardingContextInjector', () => {
     const result = await provider.process(
       createContext([
         { content: 'System role', role: 'system' },
-        {
-          content: '<knowledge_context>Docs</knowledge_context>',
-          meta: { systemInjection: true },
-          role: 'user',
-        },
         { content: 'Hello', role: 'user' },
+        { content: 'Tool result', role: 'tool' },
       ]),
     );
 
-    expect(result.messages).toHaveLength(3);
-    expect(result.messages[1].content).toBe(`<knowledge_context>Docs</knowledge_context>
-
-<onboarding_context>
+    expect(result.messages).toHaveLength(4);
+    expect(result.messages[3]).toMatchObject({
+      meta: {
+        injectType: 'OnboardingContextInjector',
+        virtualLastUser: true,
+      },
+      role: 'user',
+    });
+    expect(result.messages[3].content).toBe(`<onboarding_context>
 <phase>collect-profile</phase>
 </onboarding_context>`);
   });
@@ -86,17 +84,16 @@ describe('OnboardingContextInjector', () => {
 
     const result = await provider.process(
       createContext([
+        { content: 'Hello', role: 'user' },
         {
           content: '<onboarding_context>\n<phase>existing</phase>\n</onboarding_context>',
-          meta: { systemInjection: true },
+          meta: { injectType: 'OnboardingContextInjector', virtualLastUser: true },
           role: 'user',
         },
-        { content: 'Hello', role: 'user' },
       ]),
     );
 
     expect(result.messages).toHaveLength(2);
-    expect(result.messages[0].content).toContain('<phase>existing</phase>');
-    expect(result.messages[1].content).toBe('Hello');
+    expect(result.messages[1].content).toContain('<phase>existing</phase>');
   });
 });
