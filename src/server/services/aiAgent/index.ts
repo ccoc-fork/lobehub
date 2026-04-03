@@ -124,10 +124,16 @@ interface InternalExecAgentParams extends ExecAgentParams {
   functionTools?: Array<{ description?: string; name: string; parameters?: Record<string, any> }>;
   /** External lifecycle hooks (auto-adapt to local/production mode) */
   hooks?: AgentHook[];
+  /** Initial step count offset for resumed operations (accumulated from previous runs) */
+  initialStepCount?: number;
   /** Maximum steps for the agent operation */
   maxSteps?: number;
+  /** Parent message ID to continue from. Only takes effect when resume is true */
+  parentMessageId?: string;
   queueRetries?: number;
   queueRetryDelay?: string;
+  /** Whether to continue execution from an existing persisted message */
+  resume?: boolean;
   /** Abort startup before the agent runtime operation is created */
   signal?: AbortSignal;
   /** Step lifecycle callbacks for operation tracking (server-side only) */
@@ -231,6 +237,7 @@ export class AiAgentService {
       appContext,
       autoStart = true,
       botContext,
+      deviceId: requestedDeviceId,
       botPlatformContext,
       discordContext,
       existingMessageIds = [],
@@ -248,6 +255,7 @@ export class AiAgentService {
       taskId,
       evalContext,
       maxSteps,
+      initialStepCount,
       signal,
       userInterventionConfig,
       completionWebhook,
@@ -255,6 +263,8 @@ export class AiAgentService {
       queueRetryDelay,
       stepWebhook,
       webhookDelivery,
+      parentMessageId,
+      resume,
     } = params;
 
     // Validate that either agentId or slug is provided
@@ -354,13 +364,60 @@ export class AiAgentService {
       log('execAgent: appended additional instructions to systemRole');
     }
 
+    let resumeParentMessage;
+
+    if (resume) {
+      if (!parentMessageId) {
+        throw new Error('parentMessageId is required when resume is true');
+      }
+
+      if (!appContext) {
+        throw new Error('appContext is required when resume is true');
+      }
+
+      if (!appContext.topicId) {
+        throw new Error('appContext.topicId is required when resume is true');
+      }
+
+      resumeParentMessage = await this.messageModel.findById(parentMessageId);
+
+      if (!resumeParentMessage) {
+        throw new Error(`Parent message not found: ${parentMessageId}`);
+      }
+
+      if (resumeParentMessage.topicId !== appContext.topicId) {
+        throw new Error('appContext.topicId does not match parent message');
+      }
+
+      if (
+        resumeParentMessage.threadId &&
+        resumeParentMessage.threadId !== (appContext.threadId ?? undefined)
+      ) {
+        throw new Error('appContext.threadId does not match parent message');
+      }
+
+      if (resumeParentMessage.sessionId && resumeParentMessage.sessionId !== appContext.sessionId) {
+        throw new Error('appContext.sessionId does not match parent message');
+      }
+    }
+
     // 3. Handle topic creation: if no topicId provided, create a new topic; otherwise reuse existing
     let topicId = appContext?.topicId;
+    const topicBoundDeviceId = requestedDeviceId;
     if (!topicId) {
-      // Prepare metadata with cronJobId, taskId, and botContext if provided
+      if (resume) {
+        throw new Error('Resume mode requires the parent message to belong to a topic');
+      }
+
+      // Prepare metadata with cronJobId, taskId, botContext, and bound device if provided
       const metadata =
-        cronJobId || taskId || botContext
-          ? { bot: botContext, cronJobId: cronJobId || undefined, taskId: taskId || undefined }
+        cronJobId || taskId || botContext || requestedDeviceId
+          ? {
+              bot: botContext,
+              boundDeviceId: requestedDeviceId,
+              cronJobId: cronJobId || undefined,
+              taskId: taskId || undefined,
+            }
           : undefined;
 
       const newTopic = await this.topicModel.create({
@@ -480,7 +537,8 @@ export class AiAgentService {
 
       // Build device context for ToolsEngine enableChecker
       const gatewayConfigured = deviceProxy.isConfigured;
-      const boundDeviceId = agentConfig.agencyConfig?.boundDeviceId;
+      const agentBoundDeviceId = agentConfig.agencyConfig?.boundDeviceId;
+      const boundDeviceId = topicBoundDeviceId || agentBoundDeviceId;
       if (gatewayConfigured) {
         try {
           onlineDevices = await deviceProxy.queryDeviceList(this.userId);
@@ -504,9 +562,13 @@ export class AiAgentService {
         ...(isBotConversation ? [MessageToolIdentifier] : []),
       ];
 
-      // Derive activeDeviceId from device context
+      // Derive activeDeviceId from device context:
+      // 1. If this run explicitly requested a device and that device is online, use it
+      // 2. Otherwise, if the current topic has a bound device and it is online, use that
+      // 3. Otherwise, fall back to the agent-level bound device when it is online
+      // 4. Otherwise, in IM/Bot scenarios, auto-activate only when exactly one device is online
       activeDeviceId = boundDeviceId
-        ? deviceOnline
+        ? onlineDevices.some((device) => device.deviceId === boundDeviceId)
           ? boundDeviceId
           : undefined
         : (discordContext || botContext) && onlineDevices.length === 1
@@ -775,6 +837,7 @@ export class AiAgentService {
       historyMessages = await this.messageModel.query(
         {
           sessionId: appContext?.sessionId,
+          threadId: appContext?.threadId,
           topicId: appContext?.topicId ?? undefined,
         },
         { postProcessUrl },
@@ -786,7 +849,8 @@ export class AiAgentService {
       historyMessages = await this.messageModel.query(
         {
           sessionId: appContext?.sessionId,
-          topicId: appContext.topicId,
+          threadId: appContext?.threadId,
+          topicId: appContext?.topicId,
         },
         { postProcessUrl },
       );
@@ -831,15 +895,19 @@ export class AiAgentService {
 
     // 13. Create user message in database
     // Include threadId if provided (for SubAgent task execution in isolated Thread)
-    const userMessageRecord = await this.messageModel.create({
-      agentId: resolvedAgentId,
-      content: prompt,
-      files: fileIds,
-      role: 'user',
-      threadId: appContext?.threadId ?? undefined,
-      topicId,
-    });
-    log('execAgent: created user message %s', userMessageRecord.id);
+    const userMessageRecord = resume
+      ? undefined
+      : await this.messageModel.create({
+          agentId: resolvedAgentId,
+          content: prompt,
+          files: fileIds,
+          role: 'user',
+          threadId: appContext?.threadId ?? undefined,
+          topicId,
+        });
+    if (userMessageRecord) {
+      log('execAgent: created user message %s', userMessageRecord.id);
+    }
 
     // 14. Create assistant message placeholder in database
     // Include threadId if provided (for SubAgent task execution in isolated Thread)
@@ -847,7 +915,7 @@ export class AiAgentService {
       agentId: resolvedAgentId,
       content: LOADING_FLAT,
       model,
-      parentId: userMessageRecord.id,
+      parentId: parentMessageId ?? userMessageRecord?.id,
       provider,
       role: 'assistant',
       threadId: appContext?.threadId ?? undefined,
@@ -860,7 +928,7 @@ export class AiAgentService {
     const userMessage = { content: prompt, imageList, role: 'user' as const };
 
     // Combine history messages with user message
-    const allMessages = [...historyMessages, userMessage];
+    const allMessages = resume ? historyMessages : [...historyMessages, userMessage];
 
     log('execAgent: prepared evalContext for executor');
 
@@ -876,9 +944,9 @@ export class AiAgentService {
         // Pass assistant message ID so agent runtime knows which message to update
         assistantMessageId: assistantMessageRecord.id,
         isFirstMessage: true,
-        message: [{ content: prompt }],
+        message: resume ? [{ content: '' }] : [{ content: prompt }],
         // Pass user message ID as parentMessageId for reference
-        parentMessageId: userMessageRecord.id,
+        parentMessageId: parentMessageId ?? userMessageRecord?.id ?? '',
         // Include tools for initial LLM call
         tools,
       },
@@ -963,6 +1031,7 @@ export class AiAgentService {
         evalContext,
         initialContext,
         initialMessages: allMessages,
+        initialStepCount,
         maxSteps,
         modelRuntimeConfig: { model, provider },
         hooks,
@@ -1000,7 +1069,7 @@ export class AiAgentService {
         success: true,
         timestamp: new Date().toISOString(),
         topicId,
-        userMessageId: userMessageRecord.id,
+        userMessageId: userMessageRecord?.id ?? parentMessageId ?? '',
       };
     } catch (error) {
       if (isAbortError(error)) {
@@ -1041,7 +1110,7 @@ export class AiAgentService {
         success: false,
         timestamp: new Date().toISOString(),
         topicId,
-        userMessageId: userMessageRecord.id,
+        userMessageId: userMessageRecord?.id ?? parentMessageId ?? '',
       };
     }
   }

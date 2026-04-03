@@ -22,7 +22,16 @@ export { KnowledgeInjector } from './KnowledgeInjector';
 export { OnboardingContextInjector } from './OnboardingContextInjector';
 export { PageEditorContextInjector } from './PageEditorContextInjector';
 export { PageSelectionsInjector } from './PageSelectionsInjector';
-export { SelectedSkillInjector } from './SelectedSkillInjector';
+export {
+  formatSelectedSkills,
+  formatSelectedSkillsContext,
+  SelectedSkillInjector,
+} from './SelectedSkillInjector';
+export {
+  formatSelectedTools,
+  formatSelectedToolsContext,
+  SelectedToolInjector,
+} from './SelectedToolInjector';
 export { SkillContextProvider } from './SkillContextProvider';
 export { SystemDateProvider } from './SystemDateProvider';
 export { SystemRoleInjector } from './SystemRoleInjector';
@@ -83,6 +92,7 @@ export type {
 export type { PageEditorContextInjectorConfig } from './PageEditorContextInjector';
 export type { PageSelectionsInjectorConfig } from './PageSelectionsInjector';
 export type { SelectedSkillInjectorConfig } from './SelectedSkillInjector';
+export type { SelectedToolInjectorConfig } from './SelectedToolInjector';
 export type { SkillContextProviderConfig, SkillMeta } from './SkillContextProvider';
 export type { SystemDateProviderConfig } from './SystemDateProvider';
 export type { SystemRoleInjectorConfig } from './SystemRoleInjector';
