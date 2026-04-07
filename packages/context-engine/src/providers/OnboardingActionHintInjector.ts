@@ -62,6 +62,9 @@ export class OnboardingActionHintInjector extends BaseVirtualLastUserContentProv
       hints.push(
         'Continue exploring. After sufficient discovery (5-6 exchanges), call saveUserQuestion with interests and responseLanguage. Update the persona document with updateDocument(type="persona") as you learn more.',
       );
+      hints.push(
+        'EARLY EXIT: If the user signals they want to finish (e.g., "好了", "谢谢", "行", "Done", asking for summary, or any completion signal), STOP exploring immediately. Save whatever fields you have (call saveUserQuestion with interests even if partial), present a brief summary, then call finishOnboarding. Do NOT continue asking questions after a completion signal.',
+      );
     } else if (phase.includes('Summary')) {
       hints.push(
         'Present a summary, then after user confirmation call finishOnboarding with a warm closing message. You MUST call finishOnboarding before the conversation ends — do not keep asking questions after the user confirms the summary.',
@@ -70,6 +73,9 @@ export class OnboardingActionHintInjector extends BaseVirtualLastUserContentProv
 
     hints.push(
       'You MUST call the persistence tools (saveUserQuestion, updateDocument) to save information as you collect it. Simply acknowledging in conversation is NOT enough — data must be persisted via tool calls.',
+    );
+    hints.push(
+      'REMINDER: If the user says "好了", "谢谢", "行", "Done", "Thanks", or gives any completion signal at ANY phase, you MUST wrap up immediately and call finishOnboarding. This overrides all other phase rules.',
     );
 
     return `<next_actions>\n${hints.join('\n')}\n</next_actions>`;
