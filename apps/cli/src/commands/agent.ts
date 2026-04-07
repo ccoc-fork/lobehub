@@ -359,11 +359,7 @@ export function registerAgentCommand(program: Command) {
         const agentGatewayUrl = options.sse ? undefined : resolveAgentGatewayUrl();
 
         if (agentGatewayUrl) {
-          const token =
-            process.env.AGENT_GATEWAY_SERVICE_TOKEN ||
-            headers['Oidc-Auth'] ||
-            headers['X-API-Key'] ||
-            '';
+          const token = headers['Oidc-Auth'] || headers['X-API-Key'] || '';
           await streamAgentEventsViaWebSocket({
             gatewayUrl: agentGatewayUrl,
             json: options.json,

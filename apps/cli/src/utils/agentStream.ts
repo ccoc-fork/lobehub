@@ -182,6 +182,7 @@ export async function streamAgentEventsViaWebSocket(
     const ctx = createRenderContext();
     let lastEventId = '';
     let heartbeatTimer: ReturnType<typeof setInterval> | undefined;
+    let jsonPrinted = false;
 
     const cleanup = () => {
       if (heartbeatTimer) clearInterval(heartbeatTimer);
@@ -228,9 +229,10 @@ export async function streamAgentEventsViaWebSocket(
         }
 
         if (agentEvent.type === 'agent_runtime_end') {
-          if (streamOpts.json) {
+          if (streamOpts.json && !jsonPrinted) {
+            jsonPrinted = true;
             console.log(JSON.stringify(jsonEvents, null, 2));
-          } else {
+          } else if (!streamOpts.json) {
             renderEnd(agentEvent);
           }
           cleanup();
@@ -239,7 +241,8 @@ export async function streamAgentEventsViaWebSocket(
         }
 
         if (agentEvent.type === 'error') {
-          if (streamOpts.json) {
+          if (streamOpts.json && !jsonPrinted) {
+            jsonPrinted = true;
             console.log(JSON.stringify(jsonEvents, null, 2));
           }
           log.error(
@@ -251,7 +254,8 @@ export async function streamAgentEventsViaWebSocket(
       }
 
       if (msg.type === 'session_complete') {
-        if (streamOpts.json && jsonEvents.length > 0) {
+        if (streamOpts.json && jsonEvents.length > 0 && !jsonPrinted) {
+          jsonPrinted = true;
           console.log(JSON.stringify(jsonEvents, null, 2));
         }
         cleanup();
@@ -266,7 +270,8 @@ export async function streamAgentEventsViaWebSocket(
 
     ws.onclose = () => {
       if (heartbeatTimer) clearInterval(heartbeatTimer);
-      if (streamOpts.json && jsonEvents.length > 0) {
+      if (streamOpts.json && jsonEvents.length > 0 && !jsonPrinted) {
+        jsonPrinted = true;
         console.log(JSON.stringify(jsonEvents, null, 2));
       }
       resolve();
