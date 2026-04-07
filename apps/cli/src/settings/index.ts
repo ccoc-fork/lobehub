@@ -2,10 +2,11 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { OFFICIAL_SERVER_URL } from '../constants/urls';
+import { OFFICIAL_AGENT_GATEWAY_URL, OFFICIAL_SERVER_URL } from '../constants/urls';
 import { log } from '../utils/logger';
 
 export interface StoredSettings {
+  agentGatewayUrl?: string;
   gatewayUrl?: string;
   serverUrl?: string;
 }
@@ -23,6 +24,13 @@ export function resolveServerUrl(): string {
   const settingsServerUrl = normalizeUrl(loadSettings()?.serverUrl);
 
   return envServerUrl || settingsServerUrl || OFFICIAL_SERVER_URL;
+}
+
+export function resolveAgentGatewayUrl(): string | undefined {
+  const envUrl = normalizeUrl(process.env.AGENT_GATEWAY_URL);
+  const settingsUrl = normalizeUrl(loadSettings()?.agentGatewayUrl);
+
+  return envUrl || settingsUrl || OFFICIAL_AGENT_GATEWAY_URL;
 }
 
 export function saveSettings(settings: StoredSettings): void {
